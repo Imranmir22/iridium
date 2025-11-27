@@ -1,59 +1,194 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Iridium
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## User Import API
 
-## About Laravel
+This is a Laravel-based REST API for batch importing users from CSV files into the database.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Overview
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+The **User Import API** provides a robust endpoint to import multiple users from a CSV file. The service includes validation, error handling, transaction support, and comprehensive logging for audit trails.
 
-## Learning Laravel
+### Key Features
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+- **Batch CSV Import**: Upload CSV files with user data
+- **Data Validation**: Strict validation rules for user fields
+- **Transaction Support**: Atomic database operations (all-or-nothing)
+- **Error Logging**: Detailed logs for failed records
+- **Response Reporting**: Returns detailed error information for records that failed validation
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## API Endpoint
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Import Users
 
-### Premium Partners
+**Endpoint**: `POST /api/import-users`
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+**Description**: Imports users from a CSV file into the database.
 
-## Contributing
+#### Request
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**Method**: `POST`
 
-## Code of Conduct
+**URL**: `/api/import-users`
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**Content-Type**: `multipart/form-data`
 
-## Security Vulnerabilities
+**Request Body**:
+```
+file: <CSV file>
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+#### CSV File Format
 
-## License
+The CSV file must contain the following headers and columns (in any order):
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+| Column | Type | Constraints | Description |
+|--------|------|-----------|-------------|
+| `user_id` | String | Required, Unique | Unique identifier for the user |
+| `username` | String | Required, Alphanumeric, 3-20 chars | Username for the user account |
+| `email` | String | Required, Valid Email, Unique | User's email address |
+| `password` | String | Required, 6-20 chars | Plain text password (will be hashed) |
+
+#### Example CSV
+
+```csv
+user_id,username,email,password
+USR001,john_doe,john@example.com,SecurePass123
+USR002,jane_smith,jane@example.com,AnotherPass456
+USR003,bob_jones,bob@example.com,BobPassword789
+```
+
+#### Validation Rules
+
+- **user_id**: Must be unique and not already exist in the database
+- **username**: Must be alphanumeric, between 3-20 characters
+- **email**: Must be a valid email format and unique in the database
+- **password**: Must be between 6-20 characters
+
+#### Response
+
+**Success (HTTP 200)**:
+```json
+{
+  "message": "imported successfully, below are records which couldn't complete",
+  "record": [
+    {
+      "row": {
+        "user_id": "USR002",
+        "username": "jane",
+        "email": "invalid-email",
+        "password": "pass"
+      },
+      "errors": [
+        "The email field must be a valid email.",
+        "The password must be at least 6 characters."
+      ]
+    }
+  ]
+}
+```
+
+**Error (HTTP 500)**:
+```json
+{
+  "message": "Failed to import users",
+  "error": "<exception message>"
+}
+```
+
+#### Response Fields
+
+- `message`: Summary message of the import operation
+- `record`: Array of failed records with validation errors
+  - `row`: The row data that failed
+  - `errors`: Array of validation error messages for that row
+
+
+
+## Implementation Details
+
+### Service Architecture
+
+**Controller**: `App\Http\Controllers\UserImportController`
+- Validates the uploaded file
+- Initiates the import process with database transaction
+- Returns formatted response with error details
+
+**Service**: `App\Services\UserImportService`
+- Parses CSV file line by line
+- Validates each row according to defined rules
+- Creates user records with hashed passwords
+- Logs import statistics and errors
+- Maintains transaction integrity
+
+### Database Transaction Behavior
+
+- All rows are imported within a database transaction
+- If any unhandled error occurs, the entire import is rolled back
+- Validation errors do NOT cause rollback (failed records are reported but success records are committed)
+
+### Password Handling
+
+Passwords are hashed using Laravel's `Hash::make()` method (BCrypt) before storing in the database. Plain text passwords in the CSV are never stored.
+
+### Logging
+
+The service logs:
+- Overall import statistics (total, completed, failed)
+- Individual validation failures with row data
+- Any exceptions encountered during import
+
+**Log Location**: `storage/logs/laravel.log`
+
+---
+
+## Error Handling
+
+### Common Errors
+
+**1. Invalid File Format**
+```json
+{
+  "message": "Failed to import users",
+  "error": "The file field must be a file of type: csv."
+}
+```
+
+**2. Missing Required Column**
+```json
+{
+  "message": "imported successfully, below are records which couldn't complete",
+  "record": [
+    {
+      "row": {...},
+      "errors": [
+        "The user_id field is required.",
+        "The username field is required."
+      ]
+    }
+  ]
+}
+```
+
+**3. Duplicate Email/User ID**
+```json
+{
+  "message": "imported successfully, below are records which couldn't complete",
+  "record": [
+    {
+      "row": {
+        "user_id": "USR001",
+        "username": "john_doe",
+        "email": "john@example.com",
+        "password": "password123"
+      },
+      "errors": [
+        "The user id has already been taken.",
+        "The email has already been taken."
+      ]
+    }
+  ]
+}
